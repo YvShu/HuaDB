@@ -1,0 +1,91 @@
+statement ok
+create table rc(id int, info varchar(2));
+
+query
+insert into rc values(0, 'a');
+----
+1
+
+statement ok C1
+set isolation_level = read_committed;
+
+statement ok C2
+set isolation_level = read_committed;
+
+statement ok C1
+begin;
+
+statement ok C2
+begin;
+
+query C1
+insert into rc values(1, 'b');
+----
+1
+
+query rowsort C1
+select * from rc;
+----
+0 a
+1 b
+
+query C2
+select * from rc;
+----
+0 a
+
+# Halloween problem
+query C2
+update rc set id = id + 1;
+----
+1
+
+query rowsort C1
+select * from rc;
+----
+0 a
+1 b
+
+query C2
+select * from rc;
+----
+1 a
+
+# Lost Update
+statement error C1
+update rc set id = id + 1;
+
+statement ok C2
+commit;
+
+query rowsort C1
+select * from rc;
+----
+1 a
+1 b
+
+query rowsort C2
+select * from rc;
+----
+1 a
+
+query C1
+update rc set id = id + 1;
+----
+2
+
+statement ok C1
+rollback;
+
+query rowsort C1
+select * from rc;
+----
+1 a
+
+query rowsort C2
+select * from rc;
+----
+1 a
+
+statement ok
+drop table rc;
